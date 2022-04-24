@@ -1,0 +1,83 @@
+---
+title: "Data Report"
+output: word_document
+date: "`r format(Sys.time(), '%d %B %Y')`"
+Name: Jason Schmidt Avendaño 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, Setup}
+library(tidyverse) #need ddplyr
+library(rstanarm) #stan_glm
+library(easystats)
+```
+
+```{r, Load}
+dat_wordfreq <- read.csv(here::here("word_frequency.csv"))
+```
+
+In these data, 
+`subjet` is the participant id, 
+`item` is the setence id, 
+`fixation_time` is how long it took the the participant to fixate on the word (ms),
+and `word_frequency` is whether the word is a high-frequency or low-frequency word.
+
+1. Histogram of fixation time.
+```{r, histogram}
+ggplot(data = dat_wordfreq, 
+       mapping = aes(x = fixation_time)) +
+  geom_histogram(alpha = 0.8)
+```
+      The data on fixation time is right skewed. Fixation time is a lognormal variable that is known in the field and is typically stated as a assumption. Regardless a log transform is reasonable on this plot because it will make the graph more interpretable by centering the predictor at the mean. 
+   
+2. Lognormal regression model predicting fixation time (y) using word frequency(x).
+   Interpret the results.
+```{r, log predictor}
+log_predictor_word <- lm(log(fixation_time) ~ word_frequency, data = dat_wordfreq)
+```
+   
+```{r, log parameters}
+parameters(log_predictor_word)
+
+estimate_expectation(log_predictor_word) %>%
+  mutate( # reverse-transform predicted values
+    Predicted = exp(Predicted),
+    SE = SE * exp(Predicted),
+    CI_low = exp(CI_low),
+    CI_high = exp(CI_high),
+  ) %>%
+  plot() +
+  labs(
+    x = "Word Frequency (Target Word, High or Low)",
+    y = "Fixation Time (ms)"
+  ) +
+  theme_modern()
+```
+      On average when the frequency of the word changes from high to low there is a 12% increase in fixation times with a CI of 10% to 14%. This CI range means that we would not be surprised if the true value fell between 10% and 14%. 
+
+3. This study consists of repeated trials. We can take advantage of this design
+   by using **within-person** comparisons to make our estimates more precise.
+   To do this, add `subject` and `item` as control variables to your model.
+   (Be sure they are treated as factors!)
+
+Parameter estimates for word frequency change?
+```{r, factor}
+dat_wordfreq_factor <- mutate(dat_wordfreq, subject = factor(subject), item = factor(item))
+```
+
+```{r, Model Fit}
+dat_subanditem <- lm(log(fixation_time) ~ word_frequency + subject + item,
+                     data = dat_wordfreq_factor
+)
+```
+
+```{r, parameters subject and item}
+parameters(dat_subanditem, keep = "word_frequency")
+```
+      After controlling for the item and the subject the results are roughly the same. On average regardless of the participant or specific sentence when the frequency of the word changes from high to low there is a 12% increase in fixation times with a CI of 10% to 14%. This CI range means that we would not be surprised if the true value fell between 10% and 14%. 
+      
+Consistency with past Research and Overal Literature? 
+##Overall as frequency of words gets lower we tend to see an increase in the total amount of time that an individual needs to process. This is because when we read we are constantly making predictions about the next words in the sentence based on past sentence context we have read. So if we make a prediction about an upcoming word and its a low frequency word its more likely that the word wasnt predicted thus resulting in higher reaction time scores. Signifying that people need longer time to processing the word since it was not expected. In this data set we can see this process measure through fixation time. Individuals are spending on average 12% longer fixation time on low frequency words than high frequency words.
